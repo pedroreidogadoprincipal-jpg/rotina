@@ -220,6 +220,8 @@ button.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 .dayh.late{color:var(--bad)}
 
 .fast-row{display:flex;align-items:center;gap:14px}
+.study-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0 8px}
+.tile.wide{grid-column:1/-1}
 .big{font:800 30px/1 var(--f-display);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .clock{font:800 60px/1 var(--f-display);font-variant-numeric:tabular-nums;text-align:center;margin:16px 0 6px;letter-spacing:-.03em}
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
@@ -357,7 +359,7 @@ function daysLabel(days){const s=[...days].sort().join('');if(s==='0123456')retu
 
 /* ---------- configuração ---------- */
 function defaultCfg(){return {
-  v:1,dayStartHour:4,fastGoal:16,enem:true,setup:{},hideSetup:false,
+  v:2,dayStartHour:4,fastGoal:16,enem:true,setup:{},hideSetup:false,showStudy:true,
   missions:[
     {id:'academia',name:'Academia',goal:'1 h de treino',kind:'timer',min:60,days:[1,2,3,4,5,6],on:true,core:true},
     {id:'dieta',name:'Dieta carnívora',goal:'dia limpo, só comida da lista',kind:'check',days:ALL.slice(),on:true,core:true,slipCat:'dieta'},
@@ -365,7 +367,6 @@ function defaultCfg(){return {
     {id:'album',name:'Álbum do dia',goal:'1 álbum inteiro, sem pular faixa',kind:'music',days:ALL.slice(),on:true,core:true},
     {id:'sessao',name:'Sessão de cinema',goal:'1 título da lista, sem celular na mão',kind:'films',days:ALL.slice(),on:true,core:true},
     {id:'sono',name:'Sono',goal:'7 h ou mais',kind:'check',days:ALL.slice(),on:true,core:true},
-    {id:'foco',name:'Estudo sem celular',goal:'2 blocos de 50 min, celular na mochila',kind:'timer',min:100,days:[1,2,3,4,5],until:'2026-12-11',on:true,core:false},
     {id:'leitura',name:'Leitura',goal:'10 páginas',kind:'check',days:ALL.slice(),on:false,core:false}
   ],
   split:{0:{t:'Descanso',r:[]},1:{t:'Peito + Tríceps',r:['Peito','Tríceps']},2:{t:'Costas + Bíceps',r:['Costas','Bíceps','Antebraço']},3:{t:'Pernas',r:['Quadríceps','Posterior de coxa','Glúteos','Panturrilha']},4:{t:'Ombros + Abdômen',r:['Ombros','Trapézio','Abdômen']},5:{t:'Peito + Costas',r:['Peito','Costas']},6:{t:'Braços + Abdômen',r:['Bíceps','Tríceps','Antebraço','Abdômen']}},
@@ -429,7 +430,7 @@ const Store={mode:'loading',docs:{},dirty:new Set(),inflight:new Set(),tmr:{},co
 };
 const touch=id=>Store.touch(id);
 const E=Object.freeze({});
-function C(){let c=Store.docs.cfg;if(!c||typeof c!=='object'){c=Store.docs.cfg=defaultCfg();}else{const def=defaultCfg();for(const k in def)if(!(k in c))c[k]=def[k];}return c;}
+function C(){let c=Store.docs.cfg;if(!c||typeof c!=='object'){c=Store.docs.cfg=defaultCfg();}else{const def=defaultCfg();for(const k in def)if(!(k in c))c[k]=def[k];if((c.v||1)<2){c.missions=(c.missions||[]).filter(m=>m.id!=='foco');c.v=2;}}return c;}
 const mis=id=>C().missions.find(m=>m.id===id);
 const DayR=d=>Store.docs['d-'+d]||E;
 const DayW=d=>{const k='d-'+d;if(!Store.docs[k]||Store.docs[k]===E)Store.docs[k]={};return Store.docs[k];};
@@ -467,7 +468,7 @@ function mState(d,m){
 function score(d){const ms=missionsOn(d).filter(m=>m.core);const done=ms.filter(m=>mState(d,m)==='done').length;return {done,total:ms.length,pct:ms.length?done/ms.length:0};}
 const lvl=p=>p<=0?0:p<.5?1:p<.8?2:p<1?3:4;
 function filmsOn(d){const a=(FDAY[d]||[]).map(f=>Object.assign({src:'f'},f));const rp=MR().rp;for(const id in rp)if(rp[id]===d&&RBY[id])a.push(Object.assign({src:'r',min:0},RBY[id]));return a;}
-function hasActivity(d){const D=DayR(d);if(D.h&&Object.values(D.h).some(v=>v===true))return true;if((D.slips||[]).length||(D.note||'').trim()||(D.urges&&D.urges.won))return true;return (cache().mb[d]||0)+(cache().fb[d]||0)>0;}
+function hasActivity(d){const D=DayR(d);if(D.h&&Object.values(D.h).some(v=>v===true))return true;if((D.mins&&Object.values(D.mins).some(v=>v>0))||(D.tm&&Object.keys(D.tm).length))return true;if((D.slips||[]).length||(D.note||'').trim()||(D.urges&&D.urges.won))return true;return (cache().mb[d]||0)+(cache().fb[d]||0)>0;}
 function musicLate(t){const out=[];for(const d of Object.keys(PLAN).sort()){if(d>=t)break;for(const id of PLAN[d])if(!musicDone(id))out.push([d,id]);}return out;}
 function filmsLate(t){return FILMS.filter(f=>f.d<t&&!filmSeen(f.id));}
 function fastDays(){const s=new Set();for(const x of FR().log){if((x.e-x.s)/36e5>=x.g)s.add(effISO(x.e));}return s;}
@@ -636,6 +637,13 @@ function fastHtml(){
     return `<section class="card"><h3>Jejum em andamento</h3><div class="fast-row">${ring({done:Math.floor(h),total:cur.g,pct:p})}<div><div class="big" data-tick="fast">${fmtHM(h)}</div><div class="m-sub">${h>=cur.g?'<span class="good-t">meta de '+cur.g+' h batida</span>':'meta '+cur.g+' h · termina '+esc(whenLabel(endAt))}</div></div></div><div class="row"><button class="btn primary" data-act="fast-end">Encerrar jejum</button><button class="btn ghost" data-act="fast-adjust">Ajustar início</button></div></section>`;}
   return `<section class="card"><h3>Jejum <span class="tag">opcional</span></h3><p class="m-sub">Liga só nos dias em que você quiser fazer. Meta:</p><div class="chips" style="margin-top:8px">${[12,14,16,18,20,24].map(x=>`<button class="chip" data-act="fast-goal" data-g="${x}" aria-pressed="${x===g}">${x} h</button>`).join('')}</div><div class="row"><button class="btn" data-act="fast-start">Começar agora</button><button class="btn ghost" data-act="fast-adjust">Já comecei antes</button></div>${last?`<div class="list" style="margin-top:8px">${last}</div>`:''}<p class="hint">Dia de perna pede comida perto do treino.</p></section>`;
 }
+function studyTotals(d){const w0=dow(d);const mon=addD(d,-((w0+6)%7)),sun=addD(mon,6);let wk=0,cyc=0;for(let i=0;i<NDAYS;i++){const x=addD(START,i);const mm=minsOf(x,'estudo');cyc+=mm;if(x>=mon&&x<=sun)wk+=mm;}return {wk,cyc};}
+function studyHtml(d){
+  if(!C().showStudy)return '';
+  const D=DayR(d);const run=!!(D.tm&&D.tm.estudo);const v=minsOf(d,'estudo');const tt=studyTotals(d);
+  const long=run&&(Date.now()-D.tm.estudo)>6*36e5;
+  return `<section class="card"><h3>Estudo <span class="tag">sem meta</span></h3><div class="study-row"><div class="big" data-tick="t|${d}|estudo">${fmtClock(v)}</div><button class="btn ${run?'':'primary'}" data-act="m-timer" data-d="${d}" data-id="estudo">${run?IC.pause+' Pausar':IC.play+(v>0?' Continuar':' Começar')}</button></div><p class="m-sub">Liga quando for estudar e pausa quando parar. Esta semana: ${fmtMin(tt.wk)} · no ciclo: ${fmtMin(tt.cyc)}</p>${long?'<p class="hint bad-t">Está ligado há mais de 6 h. Se esqueceu, pause e ajuste o total.</p>':''}<div class="row tight"><button class="chip link" data-act="m-adj" data-d="${d}" data-id="estudo" data-n="-10">−10 min</button><button class="chip link" data-act="m-adj" data-d="${d}" data-id="estudo" data-n="10">+10 min</button><button class="chip link" data-act="study-edit" data-d="${d}">ajustar total</button></div></section>`;
+}
 function musicDayHtml(d){
   const ids=PLAN[d]||[];if(!ids.length)return '';
   return `<section class="card"><h3>No fone hoje <button class="chip link" data-act="go" data-v="musica">plano</button></h3><div class="list">${ids.map(id=>musicItem(MBY[id],d,true)).join('')}</div><p class="hint">Álbum inteiro, na ordem, sem pular. Vale ouvir no treino.</p></section>`;
@@ -664,7 +672,7 @@ function vHoje(){
   ${alertsHtml(d)}
   <section class="card"><h3>Missões do dia <span class="mono">${sc.done}/${sc.total}</span></h3>${missionsHtml(d)}</section>
   <div class="actions2"><button class="btn slip" data-act="slip-open" data-d="${d}">Registrar deslize</button><button class="btn urge" data-act="urge-open">Tô com vontade</button></div>
-  ${f.cur?fastHtml():''}${musicDayHtml(d)}${filmsDayHtml(d)}${f.cur?'':fastHtml()}${isT?setupHtml():''}${slipsDayHtml(d)}
+  ${f.cur?fastHtml():''}${studyHtml(d)}${musicDayHtml(d)}${filmsDayHtml(d)}${f.cur?'':fastHtml()}${isT?setupHtml():''}${slipsDayHtml(d)}
   <section class="card"><h3>Nota do dia</h3><textarea id="note-${d}" data-in="note" data-d="${d}" rows="3" placeholder="Como foi? O que ajudou, o que puxou pra trás.">${esc(DayR(d).note||'')}</textarea></section>`;
 }
 function vTreino(){
@@ -768,11 +776,12 @@ function vProgresso(){
   const maxC=Math.max(1,...Object.values(byCat));const trTop=Object.entries(byTr).sort((a,b)=>b[1]-a[1]).slice(0,3);
   const cm=cache().mb;let albC=0;for(const k in cm)if(k>=START&&k<=END)albC+=cm[k];
   const seen=FILMS.filter(f=>filmSeen(f.id));
-  const weeks=[];for(let ws=s;ws<=endW;ws=addD(ws,7)){const ds=[];for(let i=0;i<7;i++){const d=addD(ws,i);if(d>=START&&d<=END&&d<=t)ds.push(d);}if(!ds.length)continue;weeks.push({ws,p:ds.reduce((a,d)=>a+score(d).pct,0)/ds.length});}
+  const weeks=[];for(let ws=s;ws<=endW;ws=addD(ws,7)){const ds=[];for(let i=0;i<7;i++){const d=addD(ws,i);if(d>=START&&d<=END&&d<=t)ds.push(d);}if(!ds.length)continue;weeks.push({ws,p:ds.reduce((a,d)=>a+score(d).pct,0)/ds.length,st:ds.reduce((a,d)=>a+minsOf(d,'estudo'),0)});}
+  let stT=0;for(let i=0;i<NDAYS;i++)stT+=minsOf(addD(START,i),'estudo');
   return `<section class="hero sm"><h1>Progresso</h1><p class="lead">Cada quadrado é um dia do ciclo. Toque pra abrir e corrigir.</p></section>
   <section class="card"><div class="cal">${cells}</div><div class="legend"><span><i></i>0</span><span><i style="background:var(--h1)"></i>até 49%</span><span><i style="background:var(--h2)"></i>50–79%</span><span><i style="background:var(--h3)"></i>80–99%</span><span><i style="background:var(--accent)"></i>100%</span><span><i class="dot" style="background:var(--good)"></i>jejum</span><span><i class="dot" style="background:var(--bad)"></i>deslize</span></div></section>
-  <div class="tiles"><div class="tile"><div class="n">${strong}</div><div class="l">dias fortes seguidos (80% ou mais)</div></div><div class="tile"><div class="n">${sVid}</div><div class="l">dias seguidos sem vídeo curto</div></div><div class="tile"><div class="n">${sDie}</div><div class="l">dias seguidos de dieta limpa</div></div><div class="tile"><div class="n">${gy}</div><div class="l">treinos feitos</div></div><div class="tile"><div class="n">${fOk.length}</div><div class="l">jejuns na meta · ${Math.round(fH)} h no total</div></div><div class="tile"><div class="n">${urg}</div><div class="l">vontades vencidas</div></div><div class="tile"><div class="n">${albC}</div><div class="l">discos ouvidos no ciclo · ★ ${starsDone()}/${STARS.length}</div></div><div class="tile"><div class="n">${seen.length}</div><div class="l">filmes e episódios vistos · ${Math.round(seen.reduce((a,f)=>a+f.min,0)/60)} h</div></div></div>
-  <section class="card"><h3>Semana a semana</h3>${weeks.length?weeks.map((x,i)=>`<div class="stat"><span>Semana ${i+1} <span class="m-sub">· ${short(clampD(x.ws))}</span></span><span class="v">${Math.round(x.p*100)}%</span><span class="bar"><i style="width:${Math.round(x.p*100)}%"></i></span></div>`).join(''):'<p class="empty">Ainda sem dados.</p>'}</section>
+  <div class="tiles"><div class="tile"><div class="n">${strong}</div><div class="l">dias fortes seguidos (80% ou mais)</div></div><div class="tile"><div class="n">${sVid}</div><div class="l">dias seguidos sem vídeo curto</div></div><div class="tile"><div class="n">${sDie}</div><div class="l">dias seguidos de dieta limpa</div></div><div class="tile"><div class="n">${gy}</div><div class="l">treinos feitos</div></div><div class="tile"><div class="n">${fOk.length}</div><div class="l">jejuns na meta · ${Math.round(fH)} h no total</div></div><div class="tile"><div class="n">${urg}</div><div class="l">vontades vencidas</div></div><div class="tile"><div class="n">${albC}</div><div class="l">discos ouvidos no ciclo · ★ ${starsDone()}/${STARS.length}</div></div><div class="tile"><div class="n">${seen.length}</div><div class="l">filmes e episódios vistos · ${Math.round(seen.reduce((a,f)=>a+f.min,0)/60)} h</div></div><div class="tile wide"><div class="n">${fmtMin(stT)}</div><div class="l">de estudo no ciclo, contados no cronômetro</div></div></div>
+  <section class="card"><h3>Semana a semana</h3>${weeks.length?weeks.map((x,i)=>`<div class="stat"><span>Semana ${i+1} <span class="m-sub">· ${short(clampD(x.ws))}${x.st>=1?' · '+fmtMin(x.st)+' de estudo':''}</span></span><span class="v">${Math.round(x.p*100)}%</span><span class="bar"><i style="width:${Math.round(x.p*100)}%"></i></span></div>`).join(''):'<p class="empty">Ainda sem dados.</p>'}</section>
   <section class="card"><h3>Deslizes <span class="mono">${slips.length}</span></h3>${slips.length?Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="stat"><span>${esc(catName(k))}</span><span class="v">${v}</span><span class="bar"><i style="width:${Math.round(v/maxC*100)}%;background:var(--bad)"></i></span></div>`).join('')+(trTop.length?`<p class="hint">O que mais puxa: ${trTop.map(([k,v])=>esc(k)+' ('+v+')').join(', ')}.</p>`:'')+`<div class="list" style="margin-top:8px">${slips.sort((a,b)=>b.t-a.t).slice(0,12).map(x=>`<div class="stat"><span><b>${esc(catName(x.c))}</b> <span class="m-sub">· ${short(x.d)} ${hhmm(new Date(x.t))}${x.tr?' · '+esc(x.tr):''}</span>${x.n?`<span class="note" style="display:block">${esc(x.n)}</span>`:''}</span><span></span></div>`).join('')}</div>`:'<p class="empty">Nenhum deslize registrado.</p>'}</section>`;
 }
 function vAjustes(){
@@ -783,7 +792,7 @@ function vAjustes(){
   <section class="card"><h3>Tipos de deslize <button class="chip link" data-act="cat-add">+ novo</button></h3><div class="list">${c.slipCats.map(x=>`<div class="catrow"><input type="text" id="cat-${esc(x.id)}" value="${esc(x.name)}" data-ch="cat-name" data-id="${esc(x.id)}" aria-label="Nome do tipo de deslize" maxlength="40"><button class="icon-btn sm" data-act="cat-del" data-id="${esc(x.id)}" aria-label="Apagar tipo">${IC.trash}</button></div>`).join('')}</div>
   <div class="field"><label for="trg">O que costuma puxar (separe por vírgula)</label><input type="text" id="trg" value="${esc(c.triggers.join(', '))}" data-ch="triggers"></div></section>
   <section class="card"><h3>Virada do dia</h3><p class="m-sub">Até esse horário da madrugada, o que você marca ainda conta pro dia anterior.</p><div class="chips" style="margin-top:8px">${[0,1,2,3,4,5,6].map(h=>`<button class="chip" data-act="daystart" data-h="${h}" aria-pressed="${c.dayStartHour===h}">${pad(h)}:00</button>`).join('')}</div></section>
-  <section class="card"><h3>Provas</h3><div class="setrow"><div><span class="t">Vou fazer o 2º dia do ENEM (15/11)</span><span class="s">Mostra o aviso e o rótulo do dia.</span></div><button class="sw" role="switch" aria-checked="${!!c.enem}" data-act="enem-sw" aria-label="ENEM"></button></div><div class="setrow"><div><span class="t">Lista “Blindar o celular”</span><span class="s">Aparece na tela Hoje até você concluir.</span></div><button class="sw" role="switch" aria-checked="${!c.hideSetup}" data-act="setup-sw" aria-label="Mostrar lista"></button></div></section>
+  <section class="card"><h3>Tela Hoje</h3><div class="setrow"><div><span class="t">Cronômetro de estudo</span><span class="s">Sem meta: só soma as horas que você estudou.</span></div><button class="sw" role="switch" aria-checked="${C().showStudy!==false}" data-act="study-sw" aria-label="Cronômetro de estudo"></button></div><div class="setrow"><div><span class="t">Vou fazer o 2º dia do ENEM (15/11)</span><span class="s">Mostra o aviso e o rótulo do dia.</span></div><button class="sw" role="switch" aria-checked="${!!c.enem}" data-act="enem-sw" aria-label="ENEM"></button></div><div class="setrow"><div><span class="t">Lista “Blindar o celular”</span><span class="s">Aparece na tela Hoje até você concluir.</span></div><button class="sw" role="switch" aria-checked="${!c.hideSetup}" data-act="setup-sw" aria-label="Mostrar lista"></button></div></section>
   <section class="card"><h3>Alertas</h3><p class="note" style="margin-top:2px">Sem horário fixo. Os avisos aparecem quando você abre o app e acompanham o seu dia, não o relógio:</p><ul class="ul"><li>o que ainda falta, quando o dia está acabando;</li><li>prova chegando e dias especiais (feriado, Natal, réveillon);</li><li>dia anterior sem check-in e itens atrasados;</li><li>cronômetro da academia e meta do jejum: avisam na tela quando você bate o mínimo, com o app aberto.</li></ul></section>
   <section class="card"><h3>Seus dados</h3><p class="m-sub">${Store.mode==='cloud'?'Salvos na sua conta: o app abre igual no celular e no computador.':'Salvos só neste aparelho por enquanto. Baixe um backup de vez em quando.'}</p><div class="row"><button class="btn" data-act="backup">Baixar backup</button><button class="btn" data-act="restore">Restaurar backup</button><button class="btn danger" data-act="reset-open">Apagar tudo</button></div></section>
   <p class="hint" style="text-align:center">Ciclo de 10/11 a 31/12/2026 · ${NDAYS} dias</p>`;
@@ -841,6 +850,8 @@ function sheetSplit(w){const s=C().split[w]||{t:'',r:[]};
   return `<h2>Treino de ${DOWL[w].toLowerCase()}</h2><div class="field"><label for="sp-t">Nome do treino</label><input type="text" id="sp-t" value="${esc(s.r.length?s.t:'')}" placeholder="ex.: Peito + Tríceps"></div><div class="field"><label for="sp-r">Regiões (separe por vírgula)</label><input type="text" id="sp-r" value="${esc(s.r.join(', '))}" placeholder="vazio = descanso"></div><p class="hint">Regiões vazias deixam o dia como descanso, e a missão Academia some dele.</p><div class="row"><button class="btn primary" data-act="split-save" data-w="${w}">Salvar</button><button class="btn ghost" data-act="sheet-close">Cancelar</button></div>`;}
 function sheetFastAdjust(){const cur=FR().cur;const b=cur?new Date(cur.s):new Date(Date.now()-2*36e5);
   return `<h2>${cur?'Ajustar início do jejum':'Comecei o jejum antes'}</h2><div class="field"><label for="fa-t">Última refeição</label><input type="datetime-local" id="fa-t" value="${isoOf(b)}T${hhmm(b)}"></div><div class="row"><button class="btn primary" data-act="fast-adjust-save">Salvar</button><button class="btn ghost" data-act="sheet-close">Cancelar</button></div>`;}
+function sheetStudy(d){const v=Math.round(minsOf(d,'estudo'));return `<h2>Ajustar estudo</h2><p class="m-sub">${DOWL[dow(d)]}, ${longD(d)}. Corrija se esqueceu de ligar ou de pausar.</p><div class="cols"><div class="field"><label for="st-h">Horas</label><input type="number" id="st-h" inputmode="numeric" min="0" max="20" value="${Math.floor(v/60)}"></div><div class="field"><label for="st-m">Minutos</label><input type="number" id="st-m" inputmode="numeric" min="0" max="59" value="${v%60}"></div></div><div class="row"><button class="btn primary" data-act="study-save" data-d="${d}">Salvar</button><button class="btn ghost" data-act="sheet-close">Cancelar</button></div>`;}
+function saveStudy(d){const h=Math.max(0,Math.min(20,Math.floor(+(($('#st-h')||{}).value||0))));const m=Math.max(0,Math.min(59,Math.floor(+(($('#st-m')||{}).value||0))));const D=DayW(d);D.mins=D.mins||{};D.tm=D.tm||{};delete D.tm.estudo;D.mins.estudo=h*60+m;touch('d-'+d);Sheet.close();render();toast('Estudo de '+longD(d)+': '+fmtMin(h*60+m)+'.');}
 function sheetReset(){return `<h2>Apagar tudo?</h2><p class="m-sub">Some todo o registro do ciclo: missões marcadas, deslizes, jejuns, discos e filmes vistos e seus ajustes. Não dá pra desfazer. Se quiser, baixe um backup antes.</p><div class="row"><button class="btn danger" data-act="reset-do">Apagar tudo</button><button class="btn ghost" data-act="sheet-close">Cancelar</button></div>`;}
 
 /* ---------- render ---------- */
@@ -920,6 +931,9 @@ const ACTS={
   backup:()=>doBackup(),
   'copy-bk':async()=>{const t=$('#bk');try{await navigator.clipboard.writeText(t.value);toast('Copiado.');}catch(e){t.focus();t.select();toast('Texto selecionado: copie pelo menu do celular.');}},
   restore:()=>$('#restore-file').click(),
+  'study-edit':ds=>Sheet.show(()=>sheetStudy(ds.d)),
+  'study-save':ds=>saveStudy(ds.d),
+  'study-sw':()=>{C().showStudy=!C().showStudy;touch('cfg');render();},
   'reset-open':()=>Sheet.show(sheetReset),
   'reset-do':()=>doReset(),
   pick:(ds,el)=>{const g=el.closest('.chips');const req=g&&g.dataset.req==='1';const was=el.getAttribute('aria-pressed')==='true';(g?g.querySelectorAll('button.chip'):[el]).forEach(b=>b.setAttribute('aria-pressed','false'));el.setAttribute('aria-pressed',String(req?true:!was));},
