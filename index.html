@@ -285,7 +285,12 @@ const START='2026-11-10', END='2026-12-31', NDAYS=52, ALL=[0,1,2,3,4,5,6];
 const MUSIC=SEED.music, FILMS=SEED.films, RES=SEED.reserva, SESS=SEED.sessions, PLAN=SEED.plan, WHY=SEED.why, SNOTES=SEED.sessNotes||[];
 const MBY={}, RBY={}, FDAY={};
 MUSIC.forEach(x=>{MBY[x.id]=x;});
-FILMS.forEach(x=>{(FDAY[x.d]=FDAY[x.d]||[]).push(x);});
+const FIDX={};FILMS.forEach((x,i)=>{FIDX[x.id]=i;});
+const ANCH={'Tokyo Godfathers':'2026-12-24','Hatari!':'2026-12-24','O Mensageiro do Diabo':'2026-12-25','A Volta ao Mundo em 80 Dias':'2026-12-25','2001: Uma Odisseia no Espaço':'2026-12-31'};
+const ANCHD=new Set(Object.values(ANCH));
+const LIGHT={'2026-12-24':.5,'2026-12-25':.5,'2026-12-31':.5};
+const MWT=it=>it.k==='seq'?.6:(it.ch?1.5:1);
+const OFF='fora';
 RES.forEach(x=>{RBY[x.id]=x;});
 const ALB=MUSIC.filter(x=>x.k==='album'), STARS=ALB.filter(x=>x.s), SEQS=MUSIC.filter(x=>x.k==='seq'), METAS=MUSIC.filter(x=>x.k==='meta');
 const FILM_MIN=FILMS.reduce((s,f)=>s+(f.min||0),0);
@@ -301,7 +306,6 @@ const DATES=[
   {d:'2026-11-15',key:'enem',t:'ENEM · 2º dia',s:'Natureza e Matemática. Portões fecham às 13h. Domingo já é descanso do treino.',win:6,lvl:'warn'},
   {d:'2026-11-20',t:'Feriado da Consciência Negra',s:'Confira o horário da academia antes de sair.',win:2,lvl:'info'},
   {d:'2026-11-22',t:'Vestibular da UEG',s:'Domingo, dia de descanso do treino.',win:7,lvl:'warn'},
-  {d:'2026-12-11',t:'Último dia de cursinho (previsto)',s:'Data que o cronograma de filmes supôs. Depois disso o app conta como férias.',win:3,lvl:'info'},
   {d:'2026-12-24',t:'Véspera de Natal',s:'Muita academia fecha mais cedo: treine de manhã.',win:2,lvl:'info'},
   {d:'2026-12-25',t:'Natal',s:'Se a academia fechar, treino em casa conta: flexão, agachamento e prancha.',win:2,lvl:'info'},
   {d:'2026-12-31',t:'Réveillon · último dia do ciclo',s:'Fecha o ano com 2001. Em janeiro, monta o próximo.',win:5,lvl:'info'}
@@ -353,13 +357,13 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
 const pct=(a,b)=>b?Math.round(a/b*100):0;
 const vib=ms=>{try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}};
-function dtype(d){if(d==='2026-11-15'||d==='2026-11-22')return 'prova';if(d==='2026-12-24'||d==='2026-12-25'||d==='2026-12-31')return 'festa';if(d==='2026-11-20')return 'feriado';const w=dow(d);if(w===0||w===6)return 'fds';return d<='2026-12-11'?'cursinho':'ferias';}
+function dtype(d){if(d==='2026-11-15'||d==='2026-11-22')return 'prova';if(d==='2026-12-24'||d==='2026-12-25'||d==='2026-12-31')return 'festa';if(d==='2026-11-20')return 'feriado';const w=dow(d);if(w===0||w===6)return 'fds';return d<='2026-11-24'?'cursinho':'ferias';}
 function dayLabel(d){const map={'2026-11-15':C().enem?'ENEM · 2º dia':'Domingo','2026-11-20':'Feriado','2026-11-22':'Vestibular UEG','2026-12-24':'Véspera de Natal','2026-12-25':'Natal','2026-12-31':'Réveillon'};if(map[d])return map[d];return {fds:'Fim de semana',cursinho:'Dia de cursinho',ferias:'Férias'}[dtype(d)]||'';}
 function daysLabel(days){const s=[...days].sort().join('');if(s==='0123456')return 'todo dia';if(s==='123456')return 'seg a sáb';if(s==='12345')return 'seg a sex';if(s==='06')return 'fim de semana';return [1,2,3,4,5,6,0].filter(w=>days.includes(w)).map(w=>DOW3[w].toLowerCase()).join(', ');}
 
 /* ---------- configuração ---------- */
 function defaultCfg(){return {
-  v:2,dayStartHour:4,fastGoal:16,enem:true,setup:{},hideSetup:false,showStudy:true,
+  v:3,dayStartHour:4,fastGoal:16,enem:true,setup:{},hideSetup:false,showStudy:false,
   missions:[
     {id:'academia',name:'Academia',goal:'1 h de treino',kind:'timer',min:60,days:[1,2,3,4,5,6],on:true,core:true},
     {id:'dieta',name:'Dieta carnívora',goal:'dia limpo, só comida da lista',kind:'check',days:ALL.slice(),on:true,core:true,slipCat:'dieta'},
@@ -404,7 +408,7 @@ const Store={mode:'loading',docs:{},dirty:new Set(),inflight:new Set(),tmr:{},co
     const timer=setTimeout(()=>{if(!this.loaded)setSync(this.mode==='cloud'?'slow':'local');},10000);
     let db=null,uid=null;
     try{if(window.claude&&typeof window.claude.use==='function'){const r=await Promise.all([window.claude.use('db'),window.claude.use('user')]);db=r[0];uid=r[1]?await r[1].id():null;}}catch(e){db=null;}
-    if(!db||!uid){clearTimeout(timer);this.mode='local';this.dirty.clear();setSync('local');return;}
+    if(!db||!uid){clearTimeout(timer);this.mode='local';this.dirty.clear();setSync('local');ensurePlan();return;}
     try{this.col=db.collection('data/users/'+uid);}catch(e){clearTimeout(timer);this.mode='local';setSync('local');return;}
     this.mode='cloud';setSync('sync');
     this.col.onSnapshot(snap=>{
@@ -423,6 +427,7 @@ const Store={mode:'loading',docs:{},dirty:new Set(),inflight:new Set(),tmr:{},co
         this.loaded=true;clearTimeout(timer);setSync('ok');
         if(snap.empty){for(const id of Object.keys(this.docs)){const b=this.docs[id];if(b&&typeof b==='object'&&Object.keys(b).length)this.dirty.add(id);}}
         for(const id of [...this.dirty])this.flush(id);
+        setTimeout(ensurePlan,0);
       }
       if(changed){this.rev++;this.saveLocal();render();}
     },()=>{clearTimeout(timer);this.mode='local';this.dirty.clear();setSync('local');render();});
@@ -430,7 +435,7 @@ const Store={mode:'loading',docs:{},dirty:new Set(),inflight:new Set(),tmr:{},co
 };
 const touch=id=>Store.touch(id);
 const E=Object.freeze({});
-function C(){let c=Store.docs.cfg;if(!c||typeof c!=='object'){c=Store.docs.cfg=defaultCfg();}else{const def=defaultCfg();for(const k in def)if(!(k in c))c[k]=def[k];if((c.v||1)<2){c.missions=(c.missions||[]).filter(m=>m.id!=='foco');c.v=2;}}return c;}
+function C(){let c=Store.docs.cfg;if(!c||typeof c!=='object'){c=Store.docs.cfg=defaultCfg();}else{const def=defaultCfg();for(const k in def)if(!(k in c))c[k]=def[k];if((c.v||1)<2){c.missions=(c.missions||[]).filter(m=>m.id!=='foco');c.v=2;}if(c.v<3){c.showStudy=false;c.v=3;}}return c;}
 const mis=id=>C().missions.find(m=>m.id===id);
 const DayR=d=>Store.docs['d-'+d]||E;
 const DayW=d=>{const k='d-'+d;if(!Store.docs[k]||Store.docs[k]===E)Store.docs[k]={};return Store.docs[k];};
@@ -440,6 +445,10 @@ function FR(){const f=Store.docs.fast||E;return {cur:f.cur||null,log:f.log||[]};
 function FW(){const f=Store.docs.fast||(Store.docs.fast={});if(!f.log)f.log=[];if(!('cur' in f))f.cur=null;return f;}
 
 /* ---------- regras ---------- */
+function P2(){const m=Store.docs.media;return m&&m.plan2&&m.plan2.f&&m.plan2.m?m.plan2:null;}
+const fdate=f=>{const p=P2();return (p&&p.f[f.id])||f.d;};
+function planOf(d){const p=P2();return p?(p.m[d]||[]):(PLAN[d]||[]);}
+const ALLD=(()=>{const a=[];for(let d=START;d<=END;d=addD(d,1))a.push(d);return a;})();
 let CACHE={rev:-1};
 function cache(){
   if(CACHE.rev===Store.rev)return CACHE;
@@ -447,7 +456,8 @@ function cache(){
   for(const k in m.m){const v=m.m[k];if(v)mb[v]=(mb[v]||0)+1;}
   for(const k in m.f){const v=m.f[k]&&m.f[k].d;if(v)fb[v]=(fb[v]||0)+1;}
   for(const k in m.r){const v=m.r[k];if(v)fb[v]=(fb[v]||0)+1;}
-  CACHE={rev:Store.rev,mb,fb};return CACHE;
+  const fday={};for(const f of FILMS){const d=fdate(f);(fday[d]=fday[d]||[]).push(f);}
+  CACHE={rev:Store.rev,mb,fb,fday};return CACHE;
 }
 const musicDone=id=>{const v=MR().m[id];return v===undefined?!!(MBY[id]&&MBY[id].done0):!!v;};
 const filmSeen=id=>{const f=MR().f[id];return !!(f&&f.d);};
@@ -467,10 +477,49 @@ function mState(d,m){
 }
 function score(d){const ms=missionsOn(d).filter(m=>m.core);const done=ms.filter(m=>mState(d,m)==='done').length;return {done,total:ms.length,pct:ms.length?done/ms.length:0};}
 const lvl=p=>p<=0?0:p<.5?1:p<.8?2:p<1?3:4;
-function filmsOn(d){const a=(FDAY[d]||[]).map(f=>Object.assign({src:'f'},f));const rp=MR().rp;for(const id in rp)if(rp[id]===d&&RBY[id])a.push(Object.assign({src:'r',min:0},RBY[id]));return a;}
+function filmsOn(d){const a=(cache().fday[d]||[]).map(f=>Object.assign({src:'f'},f));const rp=MR().rp;for(const id in rp)if(rp[id]===d&&RBY[id])a.push(Object.assign({src:'r',min:0},RBY[id]));return a;}
 function hasActivity(d){const D=DayR(d);if(D.h&&Object.values(D.h).some(v=>v===true))return true;if((D.mins&&Object.values(D.mins).some(v=>v>0))||(D.tm&&Object.keys(D.tm).length))return true;if((D.slips||[]).length||(D.note||'').trim()||(D.urges&&D.urges.won))return true;return (cache().mb[d]||0)+(cache().fb[d]||0)>0;}
-function musicLate(t){const out=[];for(const d of Object.keys(PLAN).sort()){if(d>=t)break;for(const id of PLAN[d])if(!musicDone(id))out.push([d,id]);}return out;}
-function filmsLate(t){return FILMS.filter(f=>f.d<t&&!filmSeen(f.id));}
+function musicLate(t){const out=[];for(const d of ALLD){if(d>=t)break;for(const id of planOf(d))if(!musicDone(id))out.push([d,id]);}return out;}
+function filmsLate(t){return FILMS.filter(f=>{const d=fdate(f);return d!==OFF&&d<t&&!filmSeen(f.id);});}
+function spread(items,wOf,days,capOf){
+  const out={};if(!items.length||!days.length)return out;
+  const caps=days.map(capOf);const tc=caps.reduce((a,b)=>a+b,0);const tw=items.reduce((a,it)=>a+wOf(it),0);
+  if(tc<=0){for(const it of items)out[it.id]=days[days.length-1];return out;}
+  const unit=tw/tc;const bounds=[];let acc=0;for(const c of caps){acc+=c*unit;bounds.push(acc);}
+  let cum=0,k=0;
+  for(const it of items){const w=wOf(it);const mid=cum+w/2;while(k<days.length-1&&(caps[k]<=0||mid>=bounds[k]))k++;out[it.id]=days[k];cum+=w;}
+  return out;
+}
+function replan(from,noRev){
+  from=clampD(from);const days=ALLD.filter(d=>d>=from);
+  const fmap={};const pend=[];
+  for(const f of FILMS){if(filmSeen(f.id))fmap[f.id]=fdate(f);else pend.push(f);}
+  const ord=f=>{const d=fdate(f);return d===OFF?'9999':d;};
+  pend.sort((a,b)=>{const da=ord(a),db=ord(b);return da<db?-1:da>db?1:FIDX[a.id]-FIDX[b.id];});
+  const flow=[];const ad=new Set();
+  for(const f of pend){const a=ANCH[f.t];if(a&&a>=from){fmap[f.id]=a;ad.add(a);}else if(noRev&&f.ty==='Revisão'){fmap[f.id]=OFF;}else flow.push(f);}
+  Object.assign(fmap,spread(flow,f=>f.min||30,days,d=>ad.has(d)?0:1));
+  const mmap={};const seen=new Set();const pm=[];
+  for(const d of ALLD){for(const id of planOf(d)){if(seen.has(id)||!MBY[id])continue;seen.add(id);if(musicDone(id))(mmap[d]=mmap[d]||[]).push(id);else pm.push(MBY[id]);}}
+  const md=spread(pm,MWT,days,d=>LIGHT[d]||1);
+  for(const it of pm){const d=md[it.id];(mmap[d]=mmap[d]||[]).push(it.id);}
+  return {from,at:Date.now(),noRev:!!noRev,f:fmap,m:mmap};
+}
+function replanStats(t){
+  const days=ALLD.filter(d=>d>=t);const pend=FILMS.filter(f=>!filmSeen(f.id));
+  const isA=f=>ANCH[f.t]&&ANCH[f.t]>=t;const ad=new Set(pend.filter(isA).map(f=>ANCH[f.t]));
+  const nd=days.filter(d=>!ad.has(d)).length||1;
+  const all=pend.filter(f=>!isA(f)).reduce((a,f)=>a+(f.min||30),0);
+  const rev=pend.filter(f=>!isA(f)&&f.ty==='Revisão');const revMin=rev.reduce((a,f)=>a+(f.min||30),0);
+  const seen=new Set();let nm=0;for(const d of ALLD)for(const id of planOf(d)){if(seen.has(id))continue;seen.add(id);if(!musicDone(id))nm++;}
+  const caps=days.reduce((a,d)=>a+(LIGHT[d]||1),0)||1;
+  return {nF:pend.length,nRev:rev.length,perAll:all/nd,perNoRev:(all-revMin)/nd,nM:nm,perM:nm/caps};
+}
+function ensurePlan(){if(P2())return;try{const m=MW();m.plan2=replan(clampToday(),false);touch('media');render();}catch(e){console.error(e);}}
+function sessWhen(name){const ds=FILMS.filter(f=>f.ses.includes(name)).map(fdate).filter(d=>d!==OFF).sort();if(!ds.length)return '';const a=ds[0],b=ds[ds.length-1];return a===b?short(a):short(a)+' a '+short(b);}
+function planNote(){const p=P2();if(!p)return SNOTES.map(esc).join('<br>');let mins=0,nd=0;for(const d of ALLD){if(d<p.from||ANCHD.has(d))continue;nd++;for(const f of (cache().fday[d]||[]))mins+=f.min||0;}
+  return `Cronograma refeito em ${short(p.from)}${p.noRev?', sem as revisões':''}: cerca de ${fmtMin(nd?mins/nd:0)} de filme por dia até 31/12. Natal e réveillon ficam só com os filmes de Natal e com 2001.<br>Sobrou tempo? Puxe títulos da aba Reserva.`;}
+function replanRow(n){return n?`<div class="alert warn" style="margin:2px 0 6px"><div><b>${n} atrasado${n>1?'s':''}</b><span>Refaça o cronograma e eles se espalham até 31/12.</span></div><button class="chip link" data-act="replan-open">refazer</button></div>`:'';}
 function fastDays(){const s=new Set();for(const x of FR().log){if((x.e-x.s)/36e5>=x.g)s.add(effISO(x.e));}return s;}
 function streak(pred){let d=clampToday(),n=0;if(!pred(d))d=addD(d,-1);while(d>=START&&pred(d)){n++;d=addD(d,-1);}return n;}
 function gymTip(d){const x=DATES.find(z=>z.d===d&&!(z.key==='enem'&&!C().enem));if(x)return x.t+': '+x.s;if(dow(d)===3)return 'Única perna da semana: capricha.';return 'Mínimo de 1 h. O horário é você que escolhe, o que conta é fechar o tempo.';}
@@ -569,7 +618,7 @@ function stripHtml(sel){const t=clampToday();let h='';for(let i=0;i<NDAYS;i++){c
 function shortWork(it){return it.k==='seq'?'♫ '+it.t:(it.a?it.a+' — ':'')+it.t;}
 function missionSub(d,m){
   if(m.id==='academia'){const s=C().split[dow(d)]||{t:''};return esc(s.t)+' · mín. '+fmtMin(m.min)+(minsOf(d,m.id)>0&&mState(d,m)!=='done'?' · '+fmtMin(Math.floor(minsOf(d,m.id)))+' feitos':'');}
-  if(m.kind==='music'){const ids=PLAN[d]||[];const a=ids.map(id=>MBY[id]).filter(x=>x&&x.k!=='seq');return a.length?esc(shortWork(a[0]))+(ids.length>1?` <span class="mono small">+${ids.length-1}</span>`:''):esc(m.goal);}
+  if(m.kind==='music'){const ids=planOf(d);const a=ids.map(id=>MBY[id]).filter(x=>x&&x.k!=='seq');return a.length?esc(shortWork(a[0]))+(ids.length>1?` <span class="mono small">+${ids.length-1}</span>`:''):esc(m.goal);}
   if(m.kind==='films'){const fl=filmsOn(d);const tot=fl.reduce((s,f)=>s+(f.min||0),0);const seen=fl.filter(f=>f.src==='f'?filmSeen(f.id):resSeen(f.id)).length;return `${seen}/${fl.length} ${fl.length===1?'título':'títulos'} · ${fmtMin(tot)} · mín. 1`;}
   if(m.slipCat&&slipsOn(d,m.slipCat))return '<span class="bad-t">deslize registrado</span> · '+esc(m.goal);
   if(m.kind==='timer'){const v=minsOf(d,m.id);return esc(m.goal)+(v>0&&mState(d,m)!=='done'?' · '+fmtMin(Math.floor(v))+' feitos':'');}
@@ -610,7 +659,7 @@ function filmItem(f,d,showDate){
   const meta=[esc(f.ty),f.min?fmtMin(f.min):esc(f.dur||''),esc(f.dir),esc(f.y)].filter(Boolean).join(' · ');
   const extra=open?`<div class="note">${esc(f.w)}</div>${f.o&&f.o!==f.t?`<div class="meta">Original: ${esc(f.o)}</div>`:''}${!isR&&f.ses?`<div class="meta">Sessão ${esc(f.ses)}</div>`:''}${!isR?rateHtml(f.id):''}`:`<div class="note clamp">${esc(f.w)}</div>`;
   const nota=!isR&&MR().f[f.id]&&MR().f[f.id].n?`<span class="chip star">nota ${MR().f[f.id].n}</span>`:'';
-  const chips=(showDate||isR||nota)?`<div class="chips">${showDate?`<span class="chip">era pra ${short(f.d)}</span>`:''}${isR?'<span class="chip">da reserva</span>':''}${nota}</div>`:'';
+  const chips=(showDate||isR||nota)?`<div class="chips">${showDate?`<span class="chip">era pra ${short(fdate(f))}</span>`:''}${isR?'<span class="chip">da reserva</span>':''}${nota}</div>`:'';
   return `<div class="item ${seen?'done':''}"><button class="box" data-act="${isR?'res':'film'}" data-id="${f.id}" data-d="${d}" aria-pressed="${seen}" aria-label="${seen?'Desmarcar':'Marcar como visto'}: ${esc(f.t)}">${seen?IC.check:''}</button><div><button class="ttl-btn" data-act="expand" data-id="${f.id}" aria-expanded="${open}"><span class="ttl">${esc(f.t)}</span></button><div class="meta">${meta}</div>${chips}${extra}</div></div>`;
 }
 function alertsHtml(d){
@@ -625,7 +674,7 @@ function alertsHtml(d){
     if(hr>=23||hr<C().dayStartHour)out.push({lvl:'info',t:'Sessão acabou? Celular carregando fora do quarto.',s:'Se for dormir depois da meia-noite, amanhã veja um episódio só.'});
     const y=addD(t,-1);if(y>=START&&y<=END&&!hasActivity(y))out.push({lvl:'warn',t:'Ontem ficou sem check-in',s:'Marque o que você fez ontem: leva 20 segundos.',act:`<button class="chip link" data-act="goday" data-d="${y}">abrir ontem</button>`});
     const ml=musicLate(t).length,fl=filmsLate(t).length;
-    if(ml||fl)out.push({lvl:'info',t:'Atrasados',s:[ml?ml+' na música':'',fl?fl+' no cinema':''].filter(Boolean).join(' · ')+'. Sem culpa: puxe quando der.',act:`<button class="chip link" data-act="go" data-v="${ml?'musica':'cinema'}">ver</button>`});
+    if(ml||fl)out.push({lvl:'info',t:'Atrasados',s:[ml?ml+' na música':'',fl?fl+' no cinema':''].filter(Boolean).join(' · ')+'. Refaça o cronograma e eles se espalham até 31/12.',act:`<button class="chip link" data-act="replan-open">refazer</button>`});
   }
   if(!out.length)return '';
   return `<section class="alerts" aria-label="Alertas">${out.map(a=>`<div class="alert ${a.lvl}"><div><b>${esc(a.t)}</b>${a.s?`<span>${esc(a.s)}</span>`:''}</div>${a.act||''}</div>`).join('')}</section>`;
@@ -645,7 +694,7 @@ function studyHtml(d){
   return `<section class="card"><h3>Estudo <span class="tag">sem meta</span></h3><div class="study-row"><div class="big" data-tick="t|${d}|estudo">${fmtClock(v)}</div><button class="btn ${run?'':'primary'}" data-act="m-timer" data-d="${d}" data-id="estudo">${run?IC.pause+' Pausar':IC.play+(v>0?' Continuar':' Começar')}</button></div><p class="m-sub">Liga quando for estudar e pausa quando parar. Esta semana: ${fmtMin(tt.wk)} · no ciclo: ${fmtMin(tt.cyc)}</p>${long?'<p class="hint bad-t">Está ligado há mais de 6 h. Se esqueceu, pause e ajuste o total.</p>':''}<div class="row tight"><button class="chip link" data-act="m-adj" data-d="${d}" data-id="estudo" data-n="-10">−10 min</button><button class="chip link" data-act="m-adj" data-d="${d}" data-id="estudo" data-n="10">+10 min</button><button class="chip link" data-act="study-edit" data-d="${d}">ajustar total</button></div></section>`;
 }
 function musicDayHtml(d){
-  const ids=PLAN[d]||[];if(!ids.length)return '';
+  const ids=planOf(d);if(!ids.length)return '';
   return `<section class="card"><h3>No fone hoje <button class="chip link" data-act="go" data-v="musica">plano</button></h3><div class="list">${ids.map(id=>musicItem(MBY[id],d,true)).join('')}</div><p class="hint">Álbum inteiro, na ordem, sem pular. Vale ouvir no treino.</p></section>`;
 }
 function filmsDayHtml(d){
@@ -691,7 +740,7 @@ function vTreino(){
 }
 function vMusica(){
   const tab=App.mt;const albDone=ALB.filter(x=>musicDone(x.id)).length;
-  const head=`<section class="hero sm"><h1>Música</h1><p class="lead">Seu guia, com um plano até 31/12: um ★ essencial por dia, e nos fins de semana e férias mais um disco e uma sequência.</p></section>
+  const head=`<section class="hero sm"><h1>Música</h1><p class="lead">Seu guia, com um plano até 31/12. Atrasou? Refaça o cronograma e o que falta se espalha até o réveillon.</p></section>
   <section class="card"><div class="stat"><span>★ essenciais</span><span class="v">${starsDone()}/${STARS.length}</span><span class="bar"><i style="width:${pct(starsDone(),STARS.length)}%"></i></span></div><div class="stat"><span>Sequências inteiras (meta 10)</span><span class="v">${seqDone()}/10</span><span class="bar"><i style="width:${Math.min(100,seqDone()*10)}%"></i></span></div><div class="stat"><span>Desafios (meta 5)</span><span class="v">${chDone()}/5</span><span class="bar"><i style="width:${Math.min(100,chDone()*20)}%"></i></span></div><div class="stat"><span>Módulos com pelo menos 1 disco</span><span class="v">${modsDone()}/16</span><span class="bar"><i style="width:${pct(modsDone(),16)}%"></i></span></div><p class="hint">${albDone} de ${ALB.length} discos do guia ouvidos.</p></section>
   <div class="seg" role="group" aria-label="Seção da música">${[['plano','Plano'],['guia','Guia completo'],['metas','Metas']].map(([k,l])=>`<button data-act="tab" data-k="mt" data-v="${k}" aria-pressed="${tab===k}">${l}</button>`).join('')}</div>`;
   if(tab==='guia')return head+`<section class="card">${guideHtml()}</section>`;
@@ -699,14 +748,14 @@ function vMusica(){
   return head+`<section class="card">${musicPlanHtml()}</section>`;
 }
 function musicPlanHtml(){
-  const t=clampToday();const days=Object.keys(PLAN).sort();let html='';
-  const late=musicLate(t);
+  const t=clampToday();let html='';const late=musicLate(t);
+  html+=replanRow(late.length);
   if(late.length)html+=`<div class="dayh late"><span>Atrasados</span><span>${late.length}</span></div><div class="list">${late.map(([d,id])=>musicItem(MBY[id],t,true,d)).join('')}</div>`;
-  const past=days.filter(d=>d<t);
+  const past=ALLD.filter(d=>d<t&&planOf(d).length);
   if(past.length)html+=`<div class="row tight"><button class="chip link" data-act="flip" data-k="pastM">${App.pastM?'esconder':'mostrar'} dias anteriores (${past.length})</button></div>`;
-  if(App.pastM)html+=past.map(d=>`<div class="dayh"><span>${DOW3[dow(d)]} ${short(d)}</span><span>${esc(dayLabel(d))}</span></div><div class="list">${PLAN[d].map(id=>musicItem(MBY[id],t,true)).join('')}</div>`).join('');
-  html+=days.filter(d=>d>=t).map(d=>`<div class="dayh ${d===t?'now':''}"><span>${d===t?'Hoje':DOW3[dow(d)]+' '+short(d)}</span><span>${esc(dayLabel(d))}</span></div><div class="list">${PLAN[d].map(id=>musicItem(MBY[id],t,true)).join('')}</div>`).join('');
-  return html;
+  if(App.pastM)html+=past.map(d=>`<div class="dayh"><span>${DOW3[dow(d)]} ${short(d)}</span><span>${esc(dayLabel(d))}</span></div><div class="list">${planOf(d).map(id=>musicItem(MBY[id],t,true)).join('')}</div>`).join('');
+  html+=ALLD.filter(d=>d>=t&&planOf(d).length).map(d=>`<div class="dayh ${d===t?'now':''}"><span>${d===t?'Hoje':DOW3[dow(d)]+' '+short(d)}</span><span>${esc(dayLabel(d))}</span></div><div class="list">${planOf(d).map(id=>musicItem(MBY[id],t,true)).join('')}</div>`).join('');
+  return html+`<div class="row"><button class="chip link" data-act="replan-open">refazer cronograma a partir de hoje</button></div>`;
 }
 function passFilter(x){const f=App.gf;if(f==='star')return !!x.s;if(f==='pend')return !musicDone(x.id);if(f==='ch')return !!x.ch;return true;}
 function guideHtml(){
@@ -738,20 +787,23 @@ function vCinema(){
   const head=`<section class="hero sm"><h1>Cinema</h1><p class="lead">Seu cronograma de filmes e animes até o réveillon, sessão por sessão.</p></section>
   <section class="card"><div class="stat"><span>${seen.length} de ${FILMS.length} vistos</span><span class="v">${Math.round(minSeen/60)} de ${Math.round(FILM_MIN/60)} h</span><span class="bar"><i style="width:${pct(seen.length,FILMS.length)}%"></i></span></div></section>
   <div class="seg" role="group" aria-label="Seção do cinema">${[['plano','Cronograma'],['sessoes','Sessões'],['reserva','Reserva']].map(([k,l])=>`<button data-act="tab" data-k="ct" data-v="${k}" aria-pressed="${tab===k}">${l}</button>`).join('')}</div>`;
-  if(tab==='sessoes')return head+`<section class="card"><p class="hint" style="margin-top:0">${SNOTES.map(esc).join('<br>')}</p><div class="list" style="margin-top:6px">${SESS.map(s=>{const fl=FILMS.filter(f=>f.ses.includes(s.name));const sv=fl.filter(f=>filmSeen(f.id)).length;return `<div class="item"><div class="snum">${esc(s.n===''?'·':s.n)}</div><div><div class="ttl">${esc(s.name)}</div><div class="meta">${esc(s.when)} · ${sv}/${fl.length} vistos</div><div class="note">${esc(s.idea)}</div></div></div>`;}).join('')}</div></section>`;
+  if(tab==='sessoes')return head+`<section class="card"><p class="hint" style="margin-top:0">${planNote()}</p><div class="list" style="margin-top:6px">${SESS.map(s=>{const fl=FILMS.filter(f=>f.ses.includes(s.name));const sv=fl.filter(f=>filmSeen(f.id)).length;return `<div class="item"><div class="snum">${esc(s.n===''?'·':s.n)}</div><div><div class="ttl">${esc(s.name)}</div><div class="meta">${esc(sessWhen(s.name)||'fora do cronograma')} · ${sv}/${fl.length} vistos</div><div class="note">${esc(s.idea)}</div></div></div>`;}).join('')}</div></section>`;
   if(tab==='reserva')return head+`<section class="card">${resHtml()}</section>`;
   return head+`<section class="card">${cinePlanHtml()}</section>`;
 }
 function cinePlanHtml(){
-  const t=clampToday();const dates=[...new Set(FILMS.map(f=>f.d))].sort();let html='';
+  const t=clampToday();const dates=[...new Set(FILMS.map(fdate))].filter(d=>d!==OFF).sort();let html='';
   const late=filmsLate(t);
+  html+=replanRow(late.length);
   if(late.length)html+=`<div class="dayh late"><span>Atrasados</span><span>${late.length}</span></div><div class="list">${late.map(f=>filmItem(Object.assign({src:'f'},f),t,true)).join('')}</div>`;
   const past=dates.filter(d=>d<t);
   if(past.length)html+=`<div class="row tight"><button class="chip link" data-act="flip" data-k="pastC">${App.pastC?'esconder':'mostrar'} dias anteriores (${past.length})</button></div>`;
   const block=d=>{const fl=filmsOn(d);return `<div class="dayh ${d===t?'now':''}"><span>${d===t?'Hoje':DOW3[dow(d)]+' '+short(d)}</span><span>${fmtMin(fl.reduce((s,f)=>s+(f.min||0),0))}</span></div><div class="list">${fl.map(f=>filmItem(f,t)).join('')}</div>`;};
   if(App.pastC)html+=past.map(block).join('');
   html+=dates.filter(d=>d>=t).map(block).join('');
-  return html;
+  const off=FILMS.filter(f=>fdate(f)===OFF);
+  if(off.length)html+=`<div class="dayh"><span>Revisões fora do cronograma</span><span>${off.filter(f=>!filmSeen(f.id)).length}</span></div><p class="hint" style="margin-top:2px">Filmes que você já viu. Veja se sobrar tempo, ou refaça o cronograma com tudo.</p><div class="list">${off.map(f=>filmItem(Object.assign({src:'f'},f),t)).join('')}</div>`;
+  return html+`<div class="row"><button class="chip link" data-act="replan-open">refazer cronograma a partir de hoje</button></div>`;
 }
 function resHtml(){
   const f=App.rf;const themes=[...new Set(RES.map(r=>r.th))];const t=clampToday();
@@ -829,7 +881,7 @@ function sheetMissionDetail(d,id){
   if(id==='dieta')body+=`<div class="cols"><div><div class="lbl">Pode</div><ul class="ul">${DIET.pode.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div><div><div class="lbl">Fica de fora</div><ul class="ul">${DIET.fora.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div><div class="lbl" style="margin-top:14px">Pra atravessar as primeiras semanas</div><ul class="ul">${DIET.dicas.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
   if(id==='semvideo')body+=`<ul class="ul" style="margin-top:10px">${VTIPS.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
   if(id==='sono')body+=`<p class="note">Marque de manhã, sobre a noite que passou. Celular carregando fora do quarto ajuda mais que qualquer app.</p>`;
-  if(m.kind==='music')body+=`<div class="list" style="margin-top:6px">${(PLAN[d]||[]).map(i=>musicItem(MBY[i],d,true)).join('')}</div>`;
+  if(m.kind==='music')body+=`<div class="list" style="margin-top:6px">${planOf(d).map(i=>musicItem(MBY[i],d,true)).join('')}</div>`;
   if(m.kind==='films')body+=`<div class="list" style="margin-top:6px">${filmsOn(d).map(f=>filmItem(f,d)).join('')}</div>`;
   const slipBtn=m.slipCat?`<button class="btn slip" data-act="slip-open" data-d="${d}" data-c="${esc(m.slipCat)}">Registrar deslize</button>`:'';
   return `<h2>${esc(m.name)}</h2><p class="m-sub">${esc(m.goal)} · ${DOWL[dow(d)].toLowerCase()}, ${longD(d)}</p>${body}
@@ -852,6 +904,14 @@ function sheetFastAdjust(){const cur=FR().cur;const b=cur?new Date(cur.s):new Da
   return `<h2>${cur?'Ajustar início do jejum':'Comecei o jejum antes'}</h2><div class="field"><label for="fa-t">Última refeição</label><input type="datetime-local" id="fa-t" value="${isoOf(b)}T${hhmm(b)}"></div><div class="row"><button class="btn primary" data-act="fast-adjust-save">Salvar</button><button class="btn ghost" data-act="sheet-close">Cancelar</button></div>`;}
 function sheetStudy(d){const v=Math.round(minsOf(d,'estudo'));return `<h2>Ajustar estudo</h2><p class="m-sub">${DOWL[dow(d)]}, ${longD(d)}. Corrija se esqueceu de ligar ou de pausar.</p><div class="cols"><div class="field"><label for="st-h">Horas</label><input type="number" id="st-h" inputmode="numeric" min="0" max="20" value="${Math.floor(v/60)}"></div><div class="field"><label for="st-m">Minutos</label><input type="number" id="st-m" inputmode="numeric" min="0" max="59" value="${v%60}"></div></div><div class="row"><button class="btn primary" data-act="study-save" data-d="${d}">Salvar</button><button class="btn ghost" data-act="sheet-close">Cancelar</button></div>`;}
 function saveStudy(d){const h=Math.max(0,Math.min(20,Math.floor(+(($('#st-h')||{}).value||0))));const m=Math.max(0,Math.min(59,Math.floor(+(($('#st-m')||{}).value||0))));const D=DayW(d);D.mins=D.mins||{};D.tm=D.tm||{};delete D.tm.estudo;D.mins.estudo=h*60+m;touch('d-'+d);Sheet.close();render();toast('Estudo de '+longD(d)+': '+fmtMin(h*60+m)+'.');}
+function sheetReplan(){const t=clampToday();const st=replanStats(t);const p=P2();
+  return `<h2>Refazer o cronograma</h2><p class="m-sub">Espalha tudo o que falta, atrasados incluídos, de hoje (${short(t)}) até 31/12. O que você já marcou fica como está.</p>
+  <div class="field"><span class="lbl">Cinema · ${st.nF} títulos faltando</span></div>
+  <div class="row" style="margin-top:8px"><button class="btn primary wide" data-act="replan-do" data-rev="1">Tudo, com revisões · ~${fmtMin(st.perAll)} por dia</button><button class="btn wide" data-act="replan-do" data-rev="0">Sem as ${st.nRev} revisões · ~${fmtMin(st.perNoRev)} por dia</button></div>
+  <p class="hint">Revisões são filmes que você já viu. Sem elas, ficam numa lista à parte pra ver se sobrar tempo.${p&&p.noRev?' Agora o plano está sem revisões.':''}</p>
+  <div class="field"><span class="lbl">Música · ${st.nM} discos e sequências faltando</span></div>
+  <p class="m-sub" style="margin-top:6px">Cerca de ${st.perM.toFixed(1).replace('.',',')} por dia, os atrasados primeiro. Natal e réveillon ficam mais leves.</p>
+  <div class="row"><button class="btn ghost" data-act="sheet-close">Cancelar</button></div>`;}
 function sheetReset(){return `<h2>Apagar tudo?</h2><p class="m-sub">Some todo o registro do ciclo: missões marcadas, deslizes, jejuns, discos e filmes vistos e seus ajustes. Não dá pra desfazer. Se quiser, baixe um backup antes.</p><div class="row"><button class="btn danger" data-act="reset-do">Apagar tudo</button><button class="btn ghost" data-act="sheet-close">Cancelar</button></div>`;}
 
 /* ---------- render ---------- */
@@ -934,6 +994,8 @@ const ACTS={
   'study-edit':ds=>Sheet.show(()=>sheetStudy(ds.d)),
   'study-save':ds=>saveStudy(ds.d),
   'study-sw':()=>{C().showStudy=!C().showStudy;touch('cfg');render();},
+  'replan-open':()=>Sheet.show(sheetReplan),
+  'replan-do':ds=>{const m=MW();m.plan2=replan(clampToday(),ds.rev==='0');touch('media');Sheet.close();App.pastM=false;App.pastC=false;render();toast(ds.rev==='0'?'Cronograma refeito sem as revisões.':'Cronograma refeito até 31/12.');},
   'reset-open':()=>Sheet.show(sheetReset),
   'reset-do':()=>doReset(),
   pick:(ds,el)=>{const g=el.closest('.chips');const req=g&&g.dataset.req==='1';const was=el.getAttribute('aria-pressed')==='true';(g?g.querySelectorAll('button.chip'):[el]).forEach(b=>b.setAttribute('aria-pressed','false'));el.setAttribute('aria-pressed',String(req?true:!was));},
